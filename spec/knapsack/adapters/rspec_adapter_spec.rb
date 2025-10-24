@@ -37,6 +37,10 @@ describe Knapsack::Adapters::RSpecAdapter do
         expect(Knapsack::Presenter).to receive(:global_time).and_return(global_time)
         expect(logger).to receive(:info).with(global_time)
 
+        # Auto-update cache with test timings
+        expect(tracker).to receive(:test_files_with_time).and_return({})
+        expect(Knapsack::Cache).to receive(:update).with({})
+
         subject.bind_time_tracker
       end
     end

@@ -20,6 +20,9 @@ module Knapsack
 
           config.after(:suite) do
             Knapsack.logger.info(Presenter.global_time)
+
+            # Auto-update cache with test timings
+            Knapsack::Cache.update(Knapsack.tracker.test_files_with_time)
           end
         end
       end
