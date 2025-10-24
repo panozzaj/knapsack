@@ -4,9 +4,20 @@ require 'spinach'
 require 'timecop'
 Timecop.safe_mode = true
 
+require 'climate_control'
+
 require 'knapsack'
 
 Dir["#{Knapsack.root}/spec/support/**/*.rb"].each { |f| require f }
+
+RSpec.configure do |config|
+  # Silence logger output in tests by stubbing the underlying puts
+  # Tests can still spy on logger.debug/info/warn methods
+  config.before(:each) do
+    # Stub the logger's internal puts calls to suppress output
+    allow(Knapsack.logger).to receive(:puts)
+  end
+end
 
 RSpec.configure do |config|
   config.order = :random
