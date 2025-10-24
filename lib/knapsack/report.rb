@@ -22,10 +22,17 @@ module Knapsack
     end
 
     def open
+      # Try cache first (auto-updated, no git pollution)
+      cached = Knapsack::Cache.load
+      return cached unless cached.empty?
+
+      # Fallback to traditional report file (legacy mode)
       report = File.read(report_path)
       JSON.parse(report)
     rescue Errno::ENOENT
-      raise "Knapsack report file #{report_path} doesn't exist. Please generate report first!"
+      # No report file and no cache - return empty hash
+      # Knapsack will use leftover distributor for all tests
+      {}
     end
 
     private

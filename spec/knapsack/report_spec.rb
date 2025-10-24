@@ -48,21 +48,36 @@ describe Knapsack::Report do
       })
     end
 
-    context 'when report file exists' do
+    context 'when cache exists' do
       before do
+        allow(Knapsack::Cache).to receive(:load).and_return({"cached_spec.rb" => 1.5})
+      end
+
+      it 'returns cache data' do
+        expect(subject).to eql({"cached_spec.rb" => 1.5})
+      end
+    end
+
+    context 'when cache is empty but report file exists' do
+      before do
+        allow(Knapsack::Cache).to receive(:load).and_return({})
         expect(File).to receive(:read).with(report_path).and_return(report_json)
       end
 
-      it { should eql(JSON.parse(report_json)) }
+      it 'falls back to report file' do
+        expect(subject).to eql(JSON.parse(report_json))
+      end
     end
 
-    context "when report file doesn't exist" do
+    context "when neither cache nor report file exist" do
       let(:report_path) { 'tmp/non_existing_report.json' }
 
-      it do
-        expect {
-          subject
-        }.to raise_error("Knapsack report file #{report_path} doesn't exist. Please generate report first!")
+      before do
+        allow(Knapsack::Cache).to receive(:load).and_return({})
+      end
+
+      it 'returns empty hash (graceful degradation)' do
+        expect(subject).to eql({})
       end
     end
   end
