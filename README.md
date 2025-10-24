@@ -1,9 +1,24 @@
-> [!WARNING]
-> Knapsack is [archived](https://knapsackpro.com/knapsack_gem?utm_source=github&utm_medium=readme&utm_campaign=knapsack_gem_archived&utm_content=warning_knapsack_gem). But [Knapsack Pro](https://knapsackpro.com?utm_source=github&utm_medium=readme&utm_campaign=knapsack_gem_archived&utm_content=warning_knapsack_pro) is available.
+# 🔀 Knapsack Fork with Auto-Caching
+
+> [!NOTE]
+> **This is a fork of the [original Knapsack gem](https://github.com/KnapsackPro/knapsack) with significant enhancements.**
 >
-> Knapsack Pro comes with a free plan and discounts on paid plans for people coming from Knapsack (see [how to migrate in 10 minutes](./MIGRATE_TO_KNAPSACK_PRO.md)).
+> The original Knapsack is [archived](https://knapsackpro.com/knapsack_gem) and no longer maintained. This fork adds:
+> - ✅ **Automatic runtime caching** - No manual report generation needed
+> - ✅ **Zero-config setup** - Works out of the box with parallel_tests
+> - ✅ **Thread-safe concurrent updates** - Perfect for CI environments
+> - ✅ **No git pollution** - Cache stored in `./tmp/.knapsack/`
+> - ✅ **Smart convergence** - Uses weighted averages for stable timings
+> - ✅ **Silent by default** - Clean test output locally, informative in CI
 >
-> This repository remains available to fork and the gem hosted on RubyGems, so your existing setup won't be affected.
+> **Key difference from original:** This fork automatically tracks test runtimes and updates the cache after each run. No need to manually generate or commit report files.
+>
+> **Perfect for GitHub Actions:** Run `spec/unit` and `spec/features` as separate parallel jobs with independent optimization. See [GitHub Actions examples](#github-actions).
+
+---
+
+> [!INFO]
+> The original Knapsack maintainers now offer [Knapsack Pro](https://knapsackpro.com?utm_source=github&utm_medium=readme&utm_campaign=knapsack_gem_archived&utm_content=warning_knapsack_pro), a paid service with dynamic splitting and advanced features. See [how to migrate](./MIGRATE_TO_KNAPSACK_PRO.md) if interested.
 
 <p align="center">
   <a href="https://knapsackpro.com?utm_source=github&utm_medium=readme&utm_campaign=knapsack_gem_archived&utm_content=hero_logo">
@@ -48,6 +63,49 @@ It comes in two flavors, `knapsack` and `knapsack_pro`:
 ## Migrate from `knapsack` to `knapsack_pro`
 
 If you already use `knapsack` and want to give `knapsack_pro` a try, here's [how to migrate in 10 minutes](./MIGRATE_TO_KNAPSACK_PRO.md).
+
+## Fork Enhancements
+
+This fork adds **automatic runtime caching** to eliminate manual report generation:
+
+### How It Works
+
+1. **First run** - Tests distributed alphabetically (no cache yet)
+2. **Automatic tracking** - Test runtimes recorded during execution
+3. **Auto-update cache** - Cache updated after test run completes (stored in `./tmp/.knapsack/`)
+4. **Second run onwards** - Tests optimally distributed using cached timings
+5. **Convergence** - Timings improve over runs using weighted averages (70% new, 30% old)
+
+### Key Benefits vs. Original
+
+| Feature | Original Knapsack | This Fork |
+|---------|-------------------|-----------|
+| Runtime tracking | Manual `KNAPSACK_GENERATE_REPORT=true` | ✅ Automatic |
+| Cache location | Git-committed JSON file | ✅ `./tmp/.knapsack/` (gitignored) |
+| Parallel safety | File locking only | ✅ Thread-safe concurrent updates |
+| New/removed tests | Manual report regeneration | ✅ Auto-handles changes |
+| Timing convergence | Static timings | ✅ Weighted averages |
+| Test output | Always verbose | ✅ Silent locally, verbose in CI |
+
+### Real-World Performance
+
+Integration test with 50 test files, 8 parallel nodes:
+- **Without cache:** 65.2% variance (poor balance)
+- **With cache:** 0.7% variance (near-perfect balance)
+- **Improvement:** 98.9%
+
+See [integration test results](requirements/integration-test-results.md) for detailed analysis.
+
+### GitHub Actions Ready
+
+Works seamlessly with GitHub Actions matrix strategy. Supports:
+- ✅ Multiple parallel test suites (e.g., unit + feature tests)
+- ✅ Separate cache directories per test suite
+- ✅ Optional cache persistence across CI runs
+
+See [GitHub Actions setup](#github-actions) for examples.
+
+---
 
 ## `knapsack`
 
@@ -394,6 +452,197 @@ knapsack spinach "-f spinach_examples"
 ```
 
 Here's an [example](https://github.com/KnapsackPro/knapsack/pull/21) when it might be useful.
+
+### GitHub Actions
+
+This fork works seamlessly with GitHub Actions using the built-in matrix strategy.
+
+#### Basic Setup (Single Test Suite)
+
+```yaml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_node_total: [8]
+        ci_node_index: [0, 1, 2, 3, 4, 5, 6, 7]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Run tests
+        env:
+          CI_NODE_TOTAL: ${{ matrix.ci_node_total }}
+          CI_NODE_INDEX: ${{ matrix.ci_node_index }}
+        run: bundle exec rake knapsack:rspec
+```
+
+**How it works:**
+1. **First run:** Tests distributed alphabetically (no cache yet)
+2. **Cache automatically updated** after run completes
+3. **Second run onwards:** Tests optimally distributed using cached timings
+4. **No manual steps needed** - cache lives in `./tmp/.knapsack/` (not committed to git)
+
+#### Multiple Test Suites (Unit + Feature Tests)
+
+Run different test directories as separate parallel jobs. Perfect for:
+- Running `spec/unit` (fast) with 4 nodes + `spec/features` (slow) with 8 nodes
+- Running `spec/models` and `spec/system` independently
+- Any scenario where you want different test suites optimized separately
+
+**Example workflow:**
+```
+GitHub Actions Workflow
+├── Job: unit-tests (4 parallel nodes)
+│   ├── Node 0: spec/unit tests (subset 1) → ./tmp/.knapsack-unit/
+│   ├── Node 1: spec/unit tests (subset 2) → ./tmp/.knapsack-unit/
+│   ├── Node 2: spec/unit tests (subset 3) → ./tmp/.knapsack-unit/
+│   └── Node 3: spec/unit tests (subset 4) → ./tmp/.knapsack-unit/
+│
+└── Job: feature-tests (4 parallel nodes) [runs simultaneously!]
+    ├── Node 0: spec/features tests (subset 1) → ./tmp/.knapsack-features/
+    ├── Node 1: spec/features tests (subset 2) → ./tmp/.knapsack-features/
+    ├── Node 2: spec/features tests (subset 3) → ./tmp/.knapsack-features/
+    └── Node 3: spec/features tests (subset 4) → ./tmp/.knapsack-features/
+```
+
+**Configuration:**
+
+```yaml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_node_total: [4]
+        ci_node_index: [0, 1, 2, 3]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Run unit tests
+        env:
+          CI_NODE_TOTAL: ${{ matrix.ci_node_total }}
+          CI_NODE_INDEX: ${{ matrix.ci_node_index }}
+          KNAPSACK_TEST_FILE_PATTERN: "spec/unit/**/*_spec.rb"
+          KNAPSACK_CACHE_DIR: "./tmp/.knapsack-unit"
+        run: bundle exec rake knapsack:rspec
+
+  feature-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_node_total: [4]
+        ci_node_index: [0, 1, 2, 3]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Run feature tests
+        env:
+          CI_NODE_TOTAL: ${{ matrix.ci_node_total }}
+          CI_NODE_INDEX: ${{ matrix.ci_node_index }}
+          KNAPSACK_TEST_FILE_PATTERN: "spec/features/**/*_spec.rb"
+          KNAPSACK_CACHE_DIR: "./tmp/.knapsack-features"
+        run: bundle exec rake knapsack:rspec
+```
+
+**Key points:**
+- ✅ Use `KNAPSACK_TEST_FILE_PATTERN` to specify which tests to run
+- ✅ Use `KNAPSACK_CACHE_DIR` to keep separate caches for each test suite
+- ✅ Each test suite maintains its own optimized distribution
+- ✅ Runs in parallel - unit and feature tests execute simultaneously
+- ✅ Different parallelization per suite (e.g., 4 nodes for unit, 8 for features)
+- ✅ Overall CI time = max(unit_time, feature_time), not sum!
+
+**Why separate caches?**
+```bash
+# Without separate caches (don't do this):
+# - Both suites share ./tmp/.knapsack/runtime.json
+# - Cache contains mixed unit + feature test timings
+# - Distribution is suboptimal for both
+
+# With separate caches (correct approach):
+# Unit tests → ./tmp/.knapsack-unit/runtime.json
+# Feature tests → ./tmp/.knapsack-features/runtime.json
+# Each cache knows only about its own tests
+# Each suite gets optimal distribution
+```
+
+**Real-world example:**
+```yaml
+# Your spec/unit has 200 fast tests (~5min total, 4 nodes = ~1.25min each)
+# Your spec/features has 100 slow tests (~40min total, 8 nodes = ~5min each)
+# Total CI time: ~5min (both run in parallel) vs ~45min (sequential)
+```
+
+#### Optional: Cache Persistence Across Runs
+
+If you want to persist the cache across CI runs (faster convergence):
+
+```yaml
+- name: Cache Knapsack runtime data
+  uses: actions/cache@v3
+  with:
+    path: tmp/.knapsack
+    key: knapsack-${{ github.ref }}-${{ github.sha }}
+    restore-keys: |
+      knapsack-${{ github.ref }}-
+      knapsack-
+
+- name: Run tests
+  env:
+    CI_NODE_TOTAL: ${{ matrix.ci_node_total }}
+    CI_NODE_INDEX: ${{ matrix.ci_node_index }}
+  run: bundle exec rake knapsack:rspec
+```
+
+**Note:** This is optional. The cache will naturally converge over a few runs even without persistence.
+
+#### Environment Variables Reference
+
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `CI_NODE_TOTAL` | Yes | Total number of parallel nodes | `8` |
+| `CI_NODE_INDEX` | Yes | Current node index (0-based) | `0` to `7` |
+| `KNAPSACK_TEST_FILE_PATTERN` | No | Glob pattern for test files | `spec/unit/**/*_spec.rb` |
+| `KNAPSACK_CACHE_DIR` | No | Cache directory path (default: `./tmp/.knapsack`) | `./tmp/.knapsack-unit` |
+| `KNAPSACK_VERBOSE` | No | Show verbose output in CI | `true` |
+
+**When to use `KNAPSACK_CACHE_DIR`:**
+- ✅ Running multiple test suites in parallel → Use different cache dirs
+- ✅ Running same tests with different configurations → Use different cache dirs
+- ❌ Running all tests together → Use default (no need to set)
 
 ### CircleCI
 
